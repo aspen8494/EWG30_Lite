@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ewg30-lite"
+version = "1.0.0"
+description = "Lightweight CLI EWG3.0 (PNNL-38953) glass formulation on user-defined waste vectors"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "openpyxl"]
+
+[project.scripts]
+ewg30-lite = "ewg30lite.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ewg30lite*"]
+
+[tool.setuptools.package-data]
+"ewg30lite.ewg" = ["data/ewg30/*.json"]
