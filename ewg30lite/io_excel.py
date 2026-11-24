@@ -22,20 +22,44 @@ from .ewg.optimize import FULL_OXIDES
 # engine path, rejected from user input with an explicit message.
 WASTE_OXIDES = [o for o in FULL_OXIDES if o != "Others"]
 
+# Extended 60-oxide row set supported by the --extended template.  Species
+# marked lump=True enter the glass ONLY through the engine's RE2O3 column:
+# the reader does NOT map individual lanthanide/actinide keys to RE2O3, so
+# users must enter their SUM on the RE2O3 row for them to be modeled — an
+# individual La2O3/Am2O3/... row is counted as un-modeled diluent mass only
+# (engine `_rows` divides by the sum over ALL keys but creates glass columns
+# for FULL_OXIDES names alone).  diluent=True rows likewise carry mass that
+# dilutes the tracked composition without entering any glass column.
+LUMPED = ("La2O3", "Ce2O3", "Pr2O3", "Nd2O3", "Sm2O3", "Eu2O3",
+          "Ac2O3", "Am2O3", "Cm2O3")
+DILUENTS = ("Rb2O", "Tc2O7", "NpO2", "PuO2", "As2O5")
+
+USER_OXIDES_60 = [
+ "Ac2O3","Ag2O","Al2O3","Am2O3","As2O5","B2O3","BaO","BeO","Bi2O3","CaO",
+ "CdO","Ce2O3","Cl","Cm2O3","CoO","Cr2O3","Cs2O","CuO","Eu2O3","F",
+ "Fe2O3","HgO","K2O","La2O3","Li2O","MgO","MnO","MoO3","Na2O","Nb2O5",
+ "Nd2O3","NiO","NpO2","P2O5","PbO","PdO","Pr2O3","PuO2","Rb2O","Rh2O3",
+ "RuO2","Sb2O3","SeO2","SiO2","Sm2O3","SnO2","SO3","SrO","Ta2O5","Tc2O7",
+ "TeO2","ThO2","TiO2","Tl2O","UO3","V2O5","WO3","Y2O3","ZnO","ZrO2",
+]
+
 _BOLD = Font(bold=True)
 _HDR_FILL = PatternFill("solid", fgColor="D9E1F2")
 _NOTE_FONT = Font(italic=True, size=9)
 
 
 # ---------------------------------------------------------------- template
-def build_template(path: str) -> str:
+def build_template(path: str, extended: bool = False) -> str:
     """Write the default Excel input template.
 
     Sheets:
       README        — instructions
-      Waste_Vector  — Oxide | Mass fraction rows (pre-filled with the report's
-                      Table 3.4 "High Al2O3" example waste; overwrite freely).
-                      Any positive scale is accepted — the engine normalizes.
+      Waste_Vector  — Oxide | Mass fraction | Notes rows (pre-filled with the
+                      report's Table 3.4 "High Al2O3" example waste; overwrite
+                      freely).  Any positive scale is accepted — normalized.
+                      extended=True writes all 60 user-requested oxide rows
+                      instead of the engine's WASTE_OXIDES list alone, with
+                      per-row Notes explaining lumped and diluent species.
       Settings      — waste mass (kg) for absolute outputs + confidence level.
     """
     wb = Workbook()
@@ -77,17 +101,54 @@ def build_template(path: str) -> str:
     ws.column_dimensions["B"].width = 16
     ws.freeze_panes = "A2"
     example = EXAMPLE_WASTES["High Al2O3"]
-    # Prefill recognized oxide rows; skip non-oxide artifact keys (spaces).
-    prefilled = [o for o in WASTE_OXIDES if example.get(o)]
+    # Extended template: all 60 requested oxide rows (order as requested),
+    # each with a Notes entry; recognized oxides in the example waste are
+    # pre-filled with that value.  RE2O3 carries the lumped lanthanides.
     r = 2
-    for ox in prefilled:
-        ws.cell(row=r, column=1, value=ox)
-        ws.cell(row=r, column=2, value=float(example[ox]))
-        r += 1
-    for ox in WASTE_OXIDES:
-        if ox not in prefilled:
+    if extended:
+        ws.cell(row=1, column=3, value="Notes").font = _BOLD
+        ws.cell(row=1, column=3).fill = _HDR_FILL
+        note_map = {}
+        for ox in LUMPED:
+            note_map[ox] = ("lumped: enter its SUM on the RE2O3 row — an "
+                            "individual value here is diluent-only")
+        note_map["RE2O3"] = ("lanthanide/actinide lump (La/Ce/Pr/Nd/Sm/Eu/"
+                             "Gd + Ac/Am/Cm, LN basis): sum the lump "
+                             "constituents here")
+        for ox in DILUENTS:
+            note_map[ox] = ("no glass column in the engine: mass enters the "
+                            "normalization only (diluent)")
+        # Lumped lanthanides of the example waste surface on the RE2O3 row
+        re2o3_sum = sum(float(example[k]) for k in LUMPED if example.get(k))
+        for ox in USER_OXIDES_60:
+            val = None
+            if ox == "RE2O3":
+                val = re2o3_sum
+            elif ox not in LUMPED and ox not in DILUENTS and example.get(ox):
+                val = float(example[ox])
             ws.cell(row=r, column=1, value=ox)
+            if val:
+                ws.cell(row=r, column=2, value=val)
+            if ox in note_map:
+                ws.cell(row=r, column=3, value=note_map[ox]).font = _NOTE_FONT
             r += 1
+        for ox in WASTE_OXIDES:
+            if ox in USER_OXIDES_60:
+                continue
+            ws.cell(row=r, column=1, value=ox)
+            if example.get(ox):
+                ws.cell(row=r, column=2, value=float(example[ox]))
+            r += 1
+    else:
+        prefilled = [o for o in WASTE_OXIDES if example.get(o)]
+        for ox in prefilled:
+            ws.cell(row=r, column=1, value=ox)
+            ws.cell(row=r, column=2, value=float(example[ox]))
+            r += 1
+        for ox in WASTE_OXIDES:
+            if ox not in prefilled:
+                ws.cell(row=r, column=1, value=ox)
+                r += 1
 
     ws2 = wb.create_sheet("Settings")
     for j, h in enumerate(["Setting", "Value", "Units"], 1):

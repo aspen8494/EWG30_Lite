@@ -56,6 +56,10 @@ def main(argv=None) -> int:
 
     ap_t = sub.add_parser("template", help="write the default Excel input template")
     ap_t.add_argument("-o", "--output", default=DEFAULT_TEMPLATE)
+    ap_t.add_argument("--extended", action="store_true",
+                      help="write the 60-oxide extended template (all user "
+                           "oxides; lanthanides lumped to RE2O3, diluents "
+                           "noted per row)")
 
     ap_r = sub.add_parser("run", help="formulate the waste vector in an input template")
     ap_r.add_argument("input", help="filled-in waste-vector .xlsx template")
@@ -65,8 +69,9 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.cmd == "template":
-        build_template(args.output)
-        print(f"Template written: {os.path.abspath(args.output)}")
+        build_template(args.output, extended=args.extended)
+        print(f"Template written: {os.path.abspath(args.output)}"
+              + (" (60-oxide extended)" if args.extended else ""))
         print("Open it, edit Waste_Vector + Settings, then: "
               f"ewg30-lite run {args.output}")
         return 0
