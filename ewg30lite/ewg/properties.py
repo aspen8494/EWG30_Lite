@@ -98,18 +98,16 @@ def fold_lanthanides(g: Dict[str, float]) -> Dict[str, float]:
 def to_br(g: Dict[str, float]) -> Dict[str, float]:
     """BR (before-retention) composition from an AR (after-retention) glass.
 
-    Returns the RENORMALIZED BR composition (mass fractions summing to 1):
-    the report's own Table 3.7 'gSO3 in br glass' rows are reproduced exactly
-    (<=0.003 wt%) only on this basis.  Species whose retention factor is 0
-    (nothing retained, e.g. HgO) contribute nothing to the BR melt and are
-    excluded rather than silently defaulted."""
-    br = {k: v / RET30.get(k, 0.99721)
-          for k, v in g.items() if v > 1e-12 and k != "Others"
-          and k not in LANTHANIDES and RET30.get(k, 0.99721) > 0}
-    tot = sum(br.values())
-    if tot > 0:
-        br = {k: v / tot for k, v in br.items()}
-    return br
+    Un-renormalized (per-key AR/nu_i): the report's wSO3 model fitting basis
+    is 'BR mass fraction, gSO3 excluded from renorm', and the engine's Upred
+    and tensor-margin batteries reproduce the report's Table 3.7 Upred rows
+    only on this basis (renormalizing shifts upred_wso3 by ~20%).
+    Species whose retention factor is 0 (nothing retained, e.g. HgO)
+    contribute nothing to the BR melt and are excluded rather than silently
+    defaulted to the 0.99721 filler."""
+    return {k: v / RET30.get(k, 0.99721)
+            for k, v in g.items() if v > 1e-12 and k != "Others"
+            and k not in LANTHANIDES and RET30.get(k, 0.99721) > 0}
 
 def basis_mole(g: Dict[str, float], named) -> Dict[str, float]:
     """Full mole conversion of EVERY oxide (per-oxide MW), normalized over all;
