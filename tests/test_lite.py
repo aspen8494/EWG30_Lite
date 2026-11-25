@@ -79,4 +79,4 @@ def test_cli_end_to_end(tmp_path):
     # High Al2O3 example: B2O3 must be a top former (boric acid present)
     gfcs = [row[0] for row in wb["GFC_Recipe"].iter_rows(min_row=2, values_only=True)
             if row[0]]
-    assert "BoricAcid" in gfcs
+    assert "Boric acid" in gfcs

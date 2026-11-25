@@ -317,7 +317,7 @@ def write_output(res: Dict, waste: Dict[str, float], settings: Dict[str, float],
         "export).")
     for j, h in enumerate(["Component",
                            "Component oxide in glass (wt%)",
-                           "As-fired mass fraction of melt input",
+                           "As-fired mass fraction of glass output",
                            "As-fired kg"], 1):
         c = ws.cell(row=r, column=j, value=h)
         c.font = _BOLD
@@ -325,6 +325,11 @@ def write_output(res: Dict, waste: Dict[str, float], settings: Dict[str, float],
     r += 1
     xgfc_sum = float(sum(res["x"].get(n, 0.0) for n in GFC_NAMES if n in res["x"]))
     wl = res["waste_loading"]
+    _DISPLAY = {"BoricAcid": "Boric acid", "Na2CO3": "Soda ash (Na2CO3)",
+                "Li2CO3": "Lithium carbonate", "Cr2O3": "Chromia (Cr2O3)",
+                "Silica": "Silica (SiO2)", "Kyanite": "Kyanite",
+                "Wollastonite": "Wollastonite", "Zincite": "Zincite (ZnO)",
+                "Zircon": "Zircon", "V2O5": "Vanadia (V2O5)"}
     ws.cell(row=r, column=1, value="Waste").font = _BOLD
     c = ws.cell(row=r, column=2, value=100.0 * (1.0 - xgfc_sum))
     c.number_format = "0.000000"
@@ -338,7 +343,7 @@ def write_output(res: Dict, waste: Dict[str, float], settings: Dict[str, float],
         raw = res["gfc_raw_mass_fraction"].get(name)
         if xk <= 1e-9 and (not raw or raw <= 1e-9):
             continue
-        ws.cell(row=r, column=1, value=name)
+        ws.cell(row=r, column=1, value=_DISPLAY.get(name, name))
         c = ws.cell(row=r, column=2, value=100.0 * xk)
         c.number_format = "0.000000"
         if raw is not None:
@@ -351,6 +356,11 @@ def write_output(res: Dict, waste: Dict[str, float], settings: Dict[str, float],
     c.number_format = "0.000000"
     if glass_kg:
         ws.cell(row=r, column=4, value=sum(res["gfc_raw_mass_fraction"].values()) * glass_kg)
+    r += 1
+    ws.cell(row=r, column=1, value="Total").font = _BOLD
+    if glass_kg:
+        ws.cell(row=r, column=4,
+                value=wl * glass_kg + sum(res["gfc_raw_mass_fraction"].values()) * glass_kg)
     r += 2
     r = _kv_table(ws, r, [("Total glass (kg)", glass_kg, "")],
                   headers=("Quantity", "Value", "Units"))
