@@ -302,34 +302,54 @@ def write_output(res: Dict, waste: Dict[str, float], settings: Dict[str, float],
         ws.cell(row=r, column=3, value=mf * 100.0).number_format = "0.0000"
         r += 1
 
-    # -------- GFC recipe (mirrors 'Glass Formers & Glass')
+    # -------- GFC recipe (standard basis; mirrors the full application's export)
     from .ewg.gfc import GFCS, GFC_NAMES
     ws = wb.create_sheet("GFC_Recipe")
     r = _ws_title(
         ws, "Glass-forming chemicals (GFC) — formulation",
-        "x_k = oxide mass fraction of glass contributed by GFC k (optimizer "
-        "decision variable).  Raw (as-fired) mass per unit glass = x_k / "
-        "oxide_yield_k.  Absolute kg = raw fraction × glass mass — the same "
-        "convention as the full application's Glass Formers & Glass export.")
-    for j, h in enumerate(["GFC", "Glass oxide fraction x_k", "Raw mass fraction",
-                           "Absolute kg"], 1):
+        "Standard basis as in PNNL-38953 Table 3.5: 'Component oxide in glass "
+        "(wt%)' = oxide mass fraction of the GLASS contributed by each "
+        "component (the optimizer decision variable x_k, times 100; the "
+        "Waste row equals the waste loading).  Supporting columns give the "
+        "as-fired chemical demand: raw mass fraction of glass-melt input = "
+        "x_k / oxide_yield_k, and absolute kg = raw fraction × glass mass "
+        "(same convention as the full application's Glass Formers & Glass "
+        "export).")
+    for j, h in enumerate(["Component",
+                           "Component oxide in glass (wt%)",
+                           "As-fired mass fraction of melt input",
+                           "As-fired kg"], 1):
         c = ws.cell(row=r, column=j, value=h)
         c.font = _BOLD
         c.fill = _HDR_FILL
     r += 1
+    xgfc_sum = float(sum(res["x"].get(n, 0.0) for n in GFC_NAMES if n in res["x"]))
+    wl = res["waste_loading"]
+    ws.cell(row=r, column=1, value="Waste").font = _BOLD
+    c = ws.cell(row=r, column=2, value=100.0 * (1.0 - xgfc_sum))
+    c.number_format = "0.000000"
+    if glass_kg:
+        ws.cell(row=r, column=3, value=wl).number_format = "0.000000"
+        ws.cell(row=r, column=4, value=wl * glass_kg).number_format = "0.000"
+    r += 1
     ordered = [n for n in GFC_NAMES if n in res["x"]]
     for name in ordered:
         xk = res["x"].get(name, 0.0)
-        ws.cell(row=r, column=1, value=name)
-        ws.cell(row=r, column=2, value=xk).number_format = "0.000000"
         raw = res["gfc_raw_mass_fraction"].get(name)
+        if xk <= 1e-9 and (not raw or raw <= 1e-9):
+            continue
+        ws.cell(row=r, column=1, value=name)
+        c = ws.cell(row=r, column=2, value=100.0 * xk)
+        c.number_format = "0.000000"
         if raw is not None:
             ws.cell(row=r, column=3, value=raw).number_format = "0.000000"
             if glass_kg:
                 ws.cell(row=r, column=4, value=raw * glass_kg).number_format = "0.000"
         r += 1
+    ws.cell(row=r, column=1, value="Total (GFC only)").font = _BOLD
+    c = ws.cell(row=r, column=2, value=100.0 * xgfc_sum)
+    c.number_format = "0.000000"
     if glass_kg:
-        ws.cell(row=r, column=1, value="Total GFC (kg as-fired)").font = _BOLD
         ws.cell(row=r, column=4, value=sum(res["gfc_raw_mass_fraction"].values()) * glass_kg)
     r += 2
     r = _kv_table(ws, r, [("Total glass (kg)", glass_kg, "")],
