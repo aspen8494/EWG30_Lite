@@ -97,6 +97,16 @@ def formulate(waste: Dict[str, float], allow_v2o5: Optional[bool] = None,
         (auto-decided when allow_v2o5 is None),
       - Cr2O3 GFC => final-glass Cr2O3 <= 0.6 wt%.
     """
+    # ---- input validation (production hardening: fail loudly, never silently)
+    if not (0.0 < float(confidence) < 1.0):
+        raise ValueError(f"confidence must be in (0, 1), got {confidence!r}")
+    bad = {k: v for k, v in waste.items()
+           if isinstance(v, (int, float)) and not isinstance(v, bool)
+           and (v < 0 or not math.isfinite(v))}
+    if bad:
+        raise ValueError(f"Negative or non-finite mass fraction for: {bad}")
+    if not waste or all(not v for v in waste.values()):
+        raise ValueError("Waste vector is empty — enter at least one positive mass fraction.")
     waste = {k: v for k, v in waste.items() if v}
     n = 1 + len(GFC_NAMES)
     names = ["Waste"] + GFC_NAMES

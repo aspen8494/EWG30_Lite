@@ -177,11 +177,17 @@ def read_template(path: str) -> Tuple[Dict[str, float], Dict[str, float]]:
 
     Raises ValueError with a user-facing message on any malformed input.
     """
-    wb = load_workbook(path, data_only=True)
+    try:
+        wb = load_workbook(path, data_only=True)
+    except ValueError as e:
+        raise ValueError(f"Cannot read '{path}' — not a valid Excel workbook: {e}") from None
+    except Exception as e:  # openpyxl surfaces corrupt zips as raw exceptions
+        raise ValueError(f"Cannot read '{path}': {type(e).__name__}: {e}") from None
     if "Waste_Vector" not in wb.sheetnames:
         raise ValueError("Input workbook has no 'Waste_Vector' sheet. "
                          "Generate the default template with: ewg30-lite template")
     ws = wb["Waste_Vector"]
+    _known = set(USER_OXIDES_60) | set(WASTE_OXIDES) | {"RE2O3"}
     waste: Dict[str, float] = {}
     for row in ws.iter_rows(min_row=2, values_only=True):
         ox, val = row[0], row[1] if len(row) > 1 else None
@@ -194,6 +200,12 @@ def read_template(path: str) -> Tuple[Dict[str, float], Dict[str, float]]:
                              "that row.")
         if val is None or val == "":
             continue
+        if ox not in _known:
+            raise ValueError(
+                f"Unrecognized oxide name '{ox}' on the Waste_Vector sheet. "
+                "A typo here would silently dilute the formulation. Check the "
+                "spelling against the template (e.g. 'Al2O3', not 'Al2o3'); "
+                "lumped lanthanides must be entered on the RE2O3 row.")
         try:
             v = float(val)
         except (TypeError, ValueError):
@@ -207,19 +219,23 @@ def read_template(path: str) -> Tuple[Dict[str, float], Dict[str, float]]:
         raise ValueError("Waste vector is empty — enter at least one positive "
                          "mass fraction on the Waste_Vector sheet.")
     waste = {k: v for k, v in waste.items()}  # engine normalizes internally
-    settings = dict(waste_mass_kg=1000.0, confidence=0.90)
-    if "Settings" in wb.sheetnames:
-        for row in wb["Settings"].iter_rows(min_row=2, values_only=True):
-            if not row or row[0] is None:
-                continue
-            k = str(row[0]).strip()
-            if k == "waste_mass_kg" and row[1] is not None:
-                settings["waste_mass_kg"] = max(float(row[1]), 0.0)
-            elif k == "confidence" and row[1] is not None:
-                c = float(row[1])
-                if not (0.0 < c < 1.0):
-                    raise ValueError(f"confidence must be in (0, 1), got {c}")
-                settings["confidence"] = c
+    settings: Dict[str, float] = {"waste_mass_kg": 1000.0, "confidence": 0.90}
+    if "Settings" not in wb.sheetnames:
+        raise ValueError("Input workbook has no 'Settings' sheet. The confidence "
+                         "level materially changes every constraint margin, so it "
+                         "must be explicit — regenerate the template with: "
+                         "ewg30-lite template, then re-enter your waste vector.")
+    for row in wb["Settings"].iter_rows(min_row=2, values_only=True):
+        if not row or row[0] is None:
+            continue
+        k = str(row[0]).strip()
+        if k == "waste_mass_kg" and row[1] is not None:
+            settings["waste_mass_kg"] = max(float(row[1]), 0.0)
+        elif k == "confidence" and row[1] is not None:
+            c = float(row[1])
+            if not (0.0 < c < 1.0):
+                raise ValueError(f"confidence must be in (0, 1), got {c}")
+            settings["confidence"] = c
     return waste, settings
 
 
